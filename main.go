@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -67,79 +66,18 @@ func printDifference(d *diff.Diff, vlF gomod.VersionLookupFunc) {
 }
 
 func printDiffEntry(de *diff.DiffEntry, vlF gomod.VersionLookupFunc) {
-	colorstring.Printf("\n[bold]%s[reset]\n", de.ModulePath)
-
-	colorstring.Printf(" - go modules: %s\n", de.GoModVersion.String())
-
-	if de.Error != nil {
-		colorstring.Printf(" - [bold][red]Error:[reset] [red]%s[reset]\n", de.Error.Error())
-	}
-
-	repo, err := github.ParseRepositoryURL(de.ModulePath)
-	if err == nil {
-		ref, err := gomod.ParseRefFromVersion(de.GoModVersion.Version)
-		if err == nil {
-			fmt.Printf(" - GitHub: %s\n", github.TreeURL(repo, ref.String()))
-		}
-	}
-
-	if de.GithubVersion != nil {
-		colorstring.Printf(" - GitHub rev: %s\n", de.GithubVersion.String())
-	}
-
-	fmt.Print(" - govendor: ")
-	if len(de.GoVendorVersions) > 0 {
-		fmt.Printf("[\n")
-		for _, gvv := range de.GoVendorVersions {
-			if gvv.IsEqual(de.GoModVersion) || gvv.IsEqual(de.GithubVersion) {
-				colorstring.Printf("       [green]%s\n", gvv.String())
-			} else {
-				fmt.Printf("       %s\n", gvv.String())
-			}
-		}
-		fmt.Print("   ]\n")
-	} else {
-		colorstring.Print("[red]not found\n")
-	}
-
-	printGoModWhy(de.ModulePath, vlF)
-}
-
-func printGoModWhy(path string, vlF gomod.VersionLookupFunc) {
-	fmt.Printf(" - go mod why: ")
-	mts, stderr, err := gomod.GoModWhy(path)
+	mts, stderr, err := gomod.GoModWhy(de.ModulePath)
 	if err != nil {
 		colorstring.Printf("[bold][red]Failed to check (%s)[reset][red]\n%s", err, stderr)
 		return
 	}
-	if len(mts) > 0 {
-		fmt.Printf("[")
+
+	var govendorVerStr string
+	if len(de.GoVendorVersions) == 0 {
+		govendorVerStr = "notFound"
 	} else {
-		colorstring.Printf("[bold][red]Package not needed (try `go mod tidy`)\n")
+		govendorVerStr = de.GoVendorVersions[0].String()
 	}
-	for _, mt := range mts {
-		for _, t := range mt {
-			versionSuffix := ""
-			githubURL := ""
+	colorstring.Printf("%s,%s,%s,%v\n", de.ModulePath, de.GoModVersion.String(), govendorVerStr, mts)
 
-			version := vlF(t)
-			if version != "" {
-				versionSuffix = " @ " + version
-
-				repo, err := github.ParseRepositoryURL(t)
-				if err == nil {
-					ref, err := gomod.ParseRefFromVersion(version)
-					if err == nil {
-						githubURL = fmt.Sprintf(" (%s)", github.TreeURL(repo, ref.String()))
-					}
-				}
-			}
-
-			fmt.Printf("\n     %s%s%s", t, versionSuffix, githubURL)
-		}
-		fmt.Println("")
-	}
-	if len(mts) > 0 {
-		fmt.Printf("   ]\n")
-	}
 }
